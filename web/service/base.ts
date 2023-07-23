@@ -1,4 +1,5 @@
-import { API_PREFIX, PUBLIC_API_PREFIX, IS_CE_EDITION } from '@/config'
+/* eslint-disable no-new, prefer-promise-reject-errors */
+import { API_PREFIX, IS_CE_EDITION, PUBLIC_API_PREFIX } from '@/config'
 import Toast from '@/app/components/base/toast'
 
 const TIME_OUT = 100000
@@ -22,7 +23,8 @@ const baseOptions = {
 }
 
 export type IOnDataMoreInfo = {
-  conversationId: string | undefined
+  conversationId?: string
+  taskId?: string
   messageId: string
   errorMessage?: string
 }
@@ -33,7 +35,9 @@ export type IOnError = (msg: string) => void
 
 type IOtherOptions = {
   isPublicAPI?: boolean
+  bodyStringify?: boolean
   needAllResponseContent?: boolean
+  deleteContentType?: boolean
   onData?: IOnData // for stream
   onError?: IOnError
   onCompleted?: IOnCompleted // for stream
@@ -46,12 +50,11 @@ function unicodeToChar(text: string) {
   })
 }
 
-
 export function format(text: string) {
   let res = text.trim()
-  if (res.startsWith('\n')) {
+  if (res.startsWith('\n'))
     res = res.replace('\n', '')
-  }
+
   return res.replaceAll('\n', '<br/>').replaceAll('```', '')
 }
 
@@ -77,12 +80,22 @@ const handleStream = (response: any, onData: IOnData, onCompleted?: IOnCompleted
         lines.forEach((message) => {
           if (message.startsWith('data: ')) { // check if it starts with data:
             // console.log(message);
-            bufferObj = JSON.parse(message.substring(6)) // remove data: and parse as json
+            try {
+              bufferObj = JSON.parse(message.substring(6)) // remove data: and parse as json
+            }
+            catch (e) {
+              // mute handle message cut off
+              onData('', isFirstMessage, {
+                conversationId: bufferObj?.conversation_id,
+                messageId: bufferObj?.id,
+              })
+              return
+            }
             if (bufferObj.status === 400 || !bufferObj.event) {
               onData('', false, {
                 conversationId: undefined,
                 messageId: '',
-                errorMessage: bufferObj.message
+                errorMessage: bufferObj.message,
               })
               hasError = true
               onCompleted && onCompleted(true)
@@ -91,25 +104,26 @@ const handleStream = (response: any, onData: IOnData, onCompleted?: IOnCompleted
             // can not use format here. Because message is splited.
             onData(unicodeToChar(bufferObj.answer), isFirstMessage, {
               conversationId: bufferObj.conversation_id,
+              taskId: bufferObj.task_id,
               messageId: bufferObj.id,
             })
             isFirstMessage = false
           }
         })
         buffer = lines[lines.length - 1]
-      } catch (e) {
+      }
+      catch (e) {
         onData('', false, {
           conversationId: undefined,
           messageId: '',
-          errorMessage: e + ''
+          errorMessage: `${e}`,
         })
         hasError = true
         onCompleted && onCompleted(true)
         return
       }
-      if (!hasError) {
+      if (!hasError)
         read()
-      }
     })
   }
   read()
@@ -120,16 +134,35 @@ const baseFetch = (
   fetchOptions: any,
   {
     isPublicAPI = false,
-    needAllResponseContent
-  }: IOtherOptions
+    bodyStringify = true,
+    needAllResponseContent,
+    deleteContentType,
+  }: IOtherOptions,
 ) => {
   const options = Object.assign({}, baseOptions, fetchOptions)
   if (isPublicAPI) {
     const sharedToken = globalThis.location.pathname.split('/').slice(-1)[0]
-    options.headers.set('Authorization', `bearer ${sharedToken}`)
+    const accessToken = localStorage.getItem('token') || JSON.stringify({ [sharedToken]: '' })
+    let accessTokenJson = { [sharedToken]: '' }
+    try {
+      accessTokenJson = JSON.parse(accessToken)
+    }
+    catch (e) {
+
+    }
+    options.headers.set('Authorization', `Bearer ${accessTokenJson[sharedToken]}`)
   }
 
-  let urlPrefix = isPublicAPI ? PUBLIC_API_PREFIX : API_PREFIX
+  if (deleteContentType) {
+    options.headers.delete('Content-Type')
+  }
+  else {
+    const contentType = options.headers.get('Content-Type')
+    if (!contentType)
+      options.headers.set('Content-Type', ContentType.json)
+  }
+
+  const urlPrefix = isPublicAPI ? PUBLIC_API_PREFIX : API_PREFIX
   let urlWithPrefix = `${urlPrefix}${url.startsWith('/') ? url : `/${url}`}`
 
   const { method, params, body } = options
@@ -148,7 +181,7 @@ const baseFetch = (
     delete options.params
   }
 
-  if (body)
+  if (body && bodyStringify)
     options.body = JSON.stringify(body)
 
   // Handle timeout
@@ -169,19 +202,21 @@ const baseFetch = (
               case 401: {
                 if (isPublicAPI) {
                   Toast.notify({ type: 'error', message: 'Invalid token' })
-                  return
+                  return bodyJson.then((data: any) => Promise.reject(data))
                 }
                 const loginUrl = `${globalThis.location.origin}/signin`
                 if (IS_CE_EDITION) {
                   bodyJson.then((data: any) => {
                     if (data.code === 'not_setup') {
                       globalThis.location.href = `${globalThis.location.origin}/install`
-                    } else {
+                    }
+                    else {
                       if (location.pathname === '/signin') {
                         bodyJson.then((data: any) => {
                           Toast.notify({ type: 'error', message: data.message })
                         })
-                      } else {
+                      }
+                      else {
                         globalThis.location.href = loginUrl
                       }
                     }
@@ -195,15 +230,13 @@ const baseFetch = (
                 new Promise(() => {
                   bodyJson.then((data: any) => {
                     Toast.notify({ type: 'error', message: data.message })
-                    if (data.code === 'already_setup') {
+                    if (data.code === 'already_setup')
                       globalThis.location.href = `${globalThis.location.origin}/signin`
-                    }
                   })
                 })
                 break
               // fall through
               default:
-                // eslint-disable-next-line no-new
                 new Promise(() => {
                   bodyJson.then((data: any) => {
                     Toast.notify({ type: 'error', message: data.message })
@@ -215,7 +248,7 @@ const baseFetch = (
 
           // handle delete api. Delete api not return content.
           if (res.status === 204) {
-            resolve({ result: "success" })
+            resolve({ result: 'success' })
             return
           }
 
@@ -243,22 +276,21 @@ export const upload = (options: any): Promise<any> => {
     ...defaultOptions,
     ...options,
     headers: { ...defaultOptions.headers, ...options.headers },
-  };
-  return new Promise(function (resolve, reject) {
+  }
+  return new Promise((resolve, reject) => {
     const xhr = options.xhr
-    xhr.open(options.method, options.url);
-    for (const key in options.headers) {
-      xhr.setRequestHeader(key, options.headers[key]);
-    }
+    xhr.open(options.method, options.url)
+    for (const key in options.headers)
+      xhr.setRequestHeader(key, options.headers[key])
+
     xhr.withCredentials = true
     xhr.responseType = 'json'
     xhr.onreadystatechange = function () {
       if (xhr.readyState === 4) {
-        if (xhr.status === 201) {
+        if (xhr.status === 201)
           resolve(xhr.response)
-        } else {
+        else
           reject(xhr)
-        }
       }
     }
     xhr.upload.onprogress = options.onprogress
@@ -274,6 +306,10 @@ export const ssePost = (url: string, fetchOptions: any, { isPublicAPI = false, o
     signal: abortController.signal,
   }, fetchOptions)
 
+  const contentType = options.headers.get('Content-Type')
+  if (!contentType)
+    options.headers.set('Content-Type', ContentType.json)
+
   getAbortController?.(abortController)
 
   const urlPrefix = isPublicAPI ? PUBLIC_API_PREFIX : API_PREFIX
@@ -287,7 +323,6 @@ export const ssePost = (url: string, fetchOptions: any, { isPublicAPI = false, o
     .then((res: any) => {
       // debugger
       if (!/^(2|3)\d{2}$/.test(res.status)) {
-        // eslint-disable-next-line no-new
         new Promise(() => {
           res.json().then((data: any) => {
             Toast.notify({ type: 'error', message: data.message || 'Server Error' })
@@ -298,14 +333,17 @@ export const ssePost = (url: string, fetchOptions: any, { isPublicAPI = false, o
       }
       return handleStream(res, (str: string, isFirstMessage: boolean, moreInfo: IOnDataMoreInfo) => {
         if (moreInfo.errorMessage) {
-          Toast.notify({ type: 'error', message: moreInfo.errorMessage })
+          onError?.(moreInfo.errorMessage)
+          if (moreInfo.errorMessage !== 'AbortError: The user aborted a request.')
+            Toast.notify({ type: 'error', message: moreInfo.errorMessage })
           return
         }
         onData?.(str, isFirstMessage, moreInfo)
       }, onCompleted)
     }).catch((e) => {
-      // debugger
-      Toast.notify({ type: 'error', message: e })
+      if (e.toString() !== 'AbortError: The user aborted a request.')
+        Toast.notify({ type: 'error', message: e })
+
       onError?.(e)
     })
 }

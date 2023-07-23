@@ -1,3 +1,8 @@
+export enum ProviderType {
+  openai = 'openai',
+  anthropic = 'anthropic',
+}
+
 export enum AppType {
   'chat' = 'chat',
   'completion' = 'completion',
@@ -83,6 +88,9 @@ export type ModelConfig = {
     enabled: boolean
   }
   suggested_questions_after_answer: {
+    enabled: boolean
+  }
+  speech_to_text: {
     enabled: boolean
   }
   agent_mode: {
@@ -179,6 +187,9 @@ export type SiteConfig = {
   copyright: string
   /** Privacy Policy */
   privacy_policy: string
+
+  icon: string
+  icon_background: string
 }
 
 /**

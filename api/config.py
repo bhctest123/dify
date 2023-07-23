@@ -28,9 +28,11 @@ DEFAULTS = {
     'SESSION_REDIS_USE_SSL': 'False',
     'OAUTH_REDIRECT_PATH': '/console/api/oauth/authorize',
     'OAUTH_REDIRECT_INDEX_PATH': '/',
-    'CONSOLE_URL': 'https://cloud.dify.ai',
-    'API_URL': 'https://api.dify.ai',
-    'APP_URL': 'https://udify.app',
+    'CONSOLE_WEB_URL': 'https://cloud.dify.ai',
+    'CONSOLE_API_URL': 'https://cloud.dify.ai',
+    'SERVICE_API_URL': 'https://api.dify.ai',
+    'APP_WEB_URL': 'https://udify.app',
+    'APP_API_URL': 'https://udify.app',
     'STORAGE_TYPE': 'local',
     'STORAGE_LOCAL_PATH': 'storage',
     'CHECK_UPDATE_URL': 'https://updates.dify.ai',
@@ -43,11 +45,16 @@ DEFAULTS = {
     'SENTRY_TRACES_SAMPLE_RATE': 1.0,
     'SENTRY_PROFILES_SAMPLE_RATE': 1.0,
     'WEAVIATE_GRPC_ENABLED': 'True',
+    'WEAVIATE_BATCH_SIZE': 100,
     'CELERY_BACKEND': 'database',
     'PDF_PREVIEW': 'True',
     'LOG_LEVEL': 'INFO',
     'DISABLE_PROVIDER_CONFIG_VALIDATION': 'False',
-    'DEFAULT_LLM_PROVIDER': 'openai'
+    'DEFAULT_LLM_PROVIDER': 'openai',
+    'OPENAI_HOSTED_QUOTA_LIMIT': 200,
+    'ANTHROPIC_HOSTED_QUOTA_LIMIT': 1000,
+    'TENANT_DOCUMENT_COUNT': 100,
+    'CLEAN_DAY_SETTING': 30
 }
 
 
@@ -75,10 +82,15 @@ class Config:
 
     def __init__(self):
         # app settings
+        self.CONSOLE_API_URL = get_env('CONSOLE_URL') if get_env('CONSOLE_URL') else get_env('CONSOLE_API_URL')
+        self.CONSOLE_WEB_URL = get_env('CONSOLE_URL') if get_env('CONSOLE_URL') else get_env('CONSOLE_WEB_URL')
+        self.SERVICE_API_URL = get_env('API_URL') if get_env('API_URL') else get_env('SERVICE_API_URL')
+        self.APP_WEB_URL = get_env('APP_URL') if get_env('APP_URL') else get_env('APP_WEB_URL')
+        self.APP_API_URL = get_env('APP_URL') if get_env('APP_URL') else get_env('APP_API_URL')
         self.CONSOLE_URL = get_env('CONSOLE_URL')
         self.API_URL = get_env('API_URL')
         self.APP_URL = get_env('APP_URL')
-        self.CURRENT_VERSION = "0.3.1"
+        self.CURRENT_VERSION = "0.3.10"
         self.COMMIT_SHA = get_env('COMMIT_SHA')
         self.EDITION = "SELF_HOSTED"
         self.DEPLOY_ENV = get_env('DEPLOY_ENV')
@@ -138,6 +150,7 @@ class Config:
         self.WEAVIATE_ENDPOINT = get_env('WEAVIATE_ENDPOINT')
         self.WEAVIATE_API_KEY = get_env('WEAVIATE_API_KEY')
         self.WEAVIATE_GRPC_ENABLED = get_bool_env('WEAVIATE_GRPC_ENABLED')
+        self.WEAVIATE_BATCH_SIZE = int(get_env('WEAVIATE_BATCH_SIZE'))
 
         # qdrant settings
         self.QDRANT_URL = get_env('QDRANT_URL')
@@ -145,9 +158,14 @@ class Config:
 
         # cors settings
         self.CONSOLE_CORS_ALLOW_ORIGINS = get_cors_allow_origins(
-            'CONSOLE_CORS_ALLOW_ORIGINS', self.CONSOLE_URL)
+            'CONSOLE_CORS_ALLOW_ORIGINS', self.CONSOLE_WEB_URL)
         self.WEB_API_CORS_ALLOW_ORIGINS = get_cors_allow_origins(
             'WEB_API_CORS_ALLOW_ORIGINS', '*')
+
+        # mail settings
+        self.MAIL_TYPE = get_env('MAIL_TYPE')
+        self.MAIL_DEFAULT_SEND_FROM = get_env('MAIL_DEFAULT_SEND_FROM')
+        self.RESEND_API_KEY = get_env('RESEND_API_KEY')
 
         # sentry settings
         self.SENTRY_DSN = get_env('SENTRY_DSN')
@@ -177,6 +195,10 @@ class Config:
 
         # hosted provider credentials
         self.OPENAI_API_KEY = get_env('OPENAI_API_KEY')
+        self.ANTHROPIC_API_KEY = get_env('ANTHROPIC_API_KEY')
+
+        self.OPENAI_HOSTED_QUOTA_LIMIT = get_env('OPENAI_HOSTED_QUOTA_LIMIT')
+        self.ANTHROPIC_HOSTED_QUOTA_LIMIT = get_env('ANTHROPIC_HOSTED_QUOTA_LIMIT')
 
         # By default it is False
         # You could disable it for compatibility with certain OpenAPI providers
@@ -185,6 +207,17 @@ class Config:
         # For temp use only
         # set default LLM provider, default is 'openai', support `azure_openai`
         self.DEFAULT_LLM_PROVIDER = get_env('DEFAULT_LLM_PROVIDER')
+
+        # notion import setting
+        self.NOTION_CLIENT_ID = get_env('NOTION_CLIENT_ID')
+        self.NOTION_CLIENT_SECRET = get_env('NOTION_CLIENT_SECRET')
+        self.NOTION_INTEGRATION_TYPE = get_env('NOTION_INTEGRATION_TYPE')
+        self.NOTION_INTERNAL_SECRET = get_env('NOTION_INTERNAL_SECRET')
+        self.NOTION_INTEGRATION_TOKEN = get_env('NOTION_INTEGRATION_TOKEN')
+
+        self.TENANT_DOCUMENT_COUNT = get_env('TENANT_DOCUMENT_COUNT')
+        self.CLEAN_DAY_SETTING = get_env('CLEAN_DAY_SETTING')
+
 
 class CloudEditionConfig(Config):
 

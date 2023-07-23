@@ -16,7 +16,7 @@ import type { IChatItem } from '@/app/components/app/chat'
 import Chat from '@/app/components/app/chat'
 import ConfigContext from '@/context/debug-configuration'
 import { ToastContext } from '@/app/components/base/toast'
-import { fetchConvesationMessages, fetchSuggestedQuestions, sendChatMessage, sendCompletionMessage } from '@/service/debug'
+import { fetchConvesationMessages, fetchSuggestedQuestions, sendChatMessage, sendCompletionMessage, stopChatMessageResponding } from '@/service/debug'
 import Button from '@/app/components/base/button'
 import type { ModelConfig as BackendModelConfig } from '@/types/app'
 import { promptVariablesToUserInputsForm } from '@/utils/model-config'
@@ -38,7 +38,8 @@ const Debug: FC<IDebug> = ({
     mode,
     introduction,
     suggestedQuestionsAfterAnswerConfig,
-    moreLikeThisConifg,
+    speechToTextConfig,
+    moreLikeThisConfig,
     inputs,
     // setInputs,
     formattingChanged,
@@ -75,6 +76,8 @@ const Debug: FC<IDebug> = ({
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [isShowFormattingChangeConfirm, setIsShowFormattingChangeConfirm] = useState(false)
   const [isShowSuggestion, setIsShowSuggestion] = useState(false)
+  const [messageTaskId, setMessageTaskId] = useState('')
+  const [hasStopResponded, setHasStopResponded, getHasStopResponded] = useGetState(false)
 
   useEffect(() => {
     if (formattingChanged && chatList.some(item => !item.isAnswer))
@@ -83,7 +86,7 @@ const Debug: FC<IDebug> = ({
     setFormattingChanged(false)
   }, [formattingChanged])
 
-  const clearConversation = () => {
+  const clearConversation = async () => {
     setConversationId(null)
     abortController?.abort()
     setResponsingFalse()
@@ -113,22 +116,22 @@ const Debug: FC<IDebug> = ({
   }
 
   const checkCanSend = () => {
-    let hasEmptyInput = false
+    let hasEmptyInput = ''
     const requiredVars = modelConfig.configs.prompt_variables.filter(({ key, name, required }) => {
       const res = (!key || !key.trim()) || (!name || !name.trim()) || (required || required === undefined || required === null)
       return res
     }) // compatible with old version
     // debugger
-    requiredVars.forEach(({ key }) => {
+    requiredVars.forEach(({ key, name }) => {
       if (hasEmptyInput)
         return
 
       if (!inputs[key])
-        hasEmptyInput = true
+        hasEmptyInput = name
     })
 
     if (hasEmptyInput) {
-      logError(t('appDebug.errorMessage.valueOfVarRequired'))
+      logError(t('appDebug.errorMessage.valueOfVarRequired', { key: hasEmptyInput }))
       return false
     }
     return !hasEmptyInput
@@ -157,6 +160,7 @@ const Debug: FC<IDebug> = ({
         enabled: false,
       },
       suggested_questions_after_answer: suggestedQuestionsAfterAnswerConfig,
+      speech_to_text: speechToTextConfig,
       agent_mode: {
         enabled: true,
         tools: [...postDatasets],
@@ -202,18 +206,20 @@ const Debug: FC<IDebug> = ({
 
     let _newConversationId: null | string = null
 
+    setHasStopResponded(false)
     setResponsingTrue()
     setIsShowSuggestion(false)
     sendChatMessage(appId, data, {
       getAbortController: (abortController) => {
         setAbortController(abortController)
       },
-      onData: (message: string, isFirstMessage: boolean, { conversationId: newConversationId, messageId }: any) => {
+      onData: (message: string, isFirstMessage: boolean, { conversationId: newConversationId, messageId, taskId }: any) => {
         responseItem.content = responseItem.content + message
         if (isFirstMessage && newConversationId) {
           setConversationId(newConversationId)
           _newConversationId = newConversationId
         }
+        setMessageTaskId(taskId)
         if (messageId)
           responseItem.id = messageId
 
@@ -253,7 +259,7 @@ const Debug: FC<IDebug> = ({
             }
           }))
         }
-        if (suggestedQuestionsAfterAnswerConfig.enabled) {
+        if (suggestedQuestionsAfterAnswerConfig.enabled && !getHasStopResponded()) {
           const { data }: any = await fetchSuggestedQuestions(appId, responseItem.id)
           setSuggestQuestions(data)
           setIsShowSuggestion(true)
@@ -304,7 +310,8 @@ const Debug: FC<IDebug> = ({
       user_input_form: promptVariablesToUserInputsForm(modelConfig.configs.prompt_variables),
       opening_statement: introduction,
       suggested_questions_after_answer: suggestedQuestionsAfterAnswerConfig,
-      more_like_this: moreLikeThisConifg,
+      speech_to_text: speechToTextConfig,
+      more_like_this: moreLikeThisConfig,
       agent_mode: {
         enabled: true,
         tools: [...postDatasets],
@@ -365,9 +372,8 @@ const Debug: FC<IDebug> = ({
         {/* Chat */}
         {mode === AppType.chat && (
           <div className="mt-[34px] h-full flex flex-col">
-            <div className={cn(doShowSuggestion ? 'pb-[140px]' : (isResponsing ? 'pb-[113px]' : 'pb-[66px]'), 'relative mt-1.5 grow h-[200px] overflow-hidden')}>
-              <div className="h-full overflow-y-auto" ref={chatListDomRef}>
-                {/* {JSON.stringify(chatList)} */}
+            <div className={cn(doShowSuggestion ? 'pb-[140px]' : (isResponsing ? 'pb-[113px]' : 'pb-[76px]'), 'relative mt-1.5 grow h-[200px] overflow-hidden')}>
+              <div className="h-full overflow-y-auto overflow-x-hidden" ref={chatListDomRef}>
                 <Chat
                   chatList={chatList}
                   onSend={onSend}
@@ -375,12 +381,15 @@ const Debug: FC<IDebug> = ({
                   feedbackDisabled
                   useCurrentUserAvatar
                   isResponsing={isResponsing}
-                  abortResponsing={() => {
-                    abortController?.abort()
+                  canStopResponsing={!!messageTaskId}
+                  abortResponsing={async () => {
+                    await stopChatMessageResponding(appId, messageTaskId)
+                    setHasStopResponded(true)
                     setResponsingFalse()
                   }}
                   isShowSuggestion={doShowSuggestion}
                   suggestionList={suggestQuestions}
+                  isShowSpeechToText={speechToTextConfig.enabled}
                 />
               </div>
             </div>
@@ -395,6 +404,7 @@ const Debug: FC<IDebug> = ({
                 className="mt-2"
                 content={completionRes}
                 isLoading={!completionRes && isResponsing}
+                isInstalledApp={false}
               />
             )}
           </div>

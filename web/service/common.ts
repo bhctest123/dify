@@ -1,13 +1,14 @@
 import type { Fetcher } from 'swr'
-import { get, post, del, put } from './base'
+import { del, get, patch, post, put } from './base'
 import type {
-  CommonResponse, LangGeniusVersionResponse, OauthResponse,
-  TenantInfoResponse, UserProfileOriginResponse, Member,
-  AccountIntegrate, Provider, ProviderAzureToken, IWorkspace
+  AccountIntegrate, CommonResponse, DataSourceNotion,
+  IWorkspace, LangGeniusVersionResponse, Member,
+  OauthResponse, Provider, ProviderAnthropicToken, ProviderAzureToken, TenantInfoResponse,
+  UserProfileOriginResponse,
 } from '@/models/common'
 import type {
+  UpdateOpenAIKeyResponse,
   ValidateOpenAIKeyResponse,
-  UpdateOpenAIKeyResponse
 } from '@/models/app'
 
 export const login: Fetcher<CommonResponse, { url: string; body: Record<string, any> }> = ({ url, body }) => {
@@ -57,7 +58,7 @@ export const fetchProviders: Fetcher<Provider[] | null, { url: string; params: R
 export const validateProviderKey: Fetcher<ValidateOpenAIKeyResponse, { url: string; body: { token: string } }> = ({ url, body }) => {
   return post(url, { body }) as Promise<ValidateOpenAIKeyResponse>
 }
-export const updateProviderAIKey: Fetcher<UpdateOpenAIKeyResponse, { url: string; body: { token: string | ProviderAzureToken } }> = ({ url, body }) => {
+export const updateProviderAIKey: Fetcher<UpdateOpenAIKeyResponse, { url: string; body: { token: string | ProviderAzureToken | ProviderAnthropicToken } }> = ({ url, body }) => {
   return post(url, { body }) as Promise<UpdateOpenAIKeyResponse>
 }
 
@@ -65,15 +66,15 @@ export const fetchAccountIntegrates: Fetcher<{ data: AccountIntegrate[] | null }
   return get(url, { params }) as Promise<{ data: AccountIntegrate[] | null }>
 }
 
-export const inviteMember: Fetcher<CommonResponse & { account: Member }, { url: string; body: Record<string, any> }> = ({ url, body }) => {
-  return post(url, { body }) as Promise<CommonResponse & { account: Member }>
+export const inviteMember: Fetcher<CommonResponse & { account: Member; invite_url: string }, { url: string; body: Record<string, any> }> = ({ url, body }) => {
+  return post(url, { body }) as Promise<CommonResponse & { account: Member; invite_url: string }>
 }
 
 export const updateMemberRole: Fetcher<CommonResponse, { url: string; body: Record<string, any> }> = ({ url, body }) => {
   return put(url, { body }) as Promise<CommonResponse>
 }
 
-export const deleteMemberOrCancelInvitation: Fetcher<CommonResponse, { url: string; }> = ({ url }) => {
+export const deleteMemberOrCancelInvitation: Fetcher<CommonResponse, { url: string }> = ({ url }) => {
   return del(url) as Promise<CommonResponse>
 }
 
@@ -89,3 +90,22 @@ export const switchWorkspace: Fetcher<CommonResponse & { new_tenant: IWorkspace 
   return post(url, { body }) as Promise<CommonResponse & { new_tenant: IWorkspace }>
 }
 
+export const fetchDataSource: Fetcher<{ data: DataSourceNotion[] }, { url: string }> = ({ url }) => {
+  return get(url) as Promise<{ data: DataSourceNotion[] }>
+}
+
+export const syncDataSourceNotion: Fetcher<CommonResponse, { url: string }> = ({ url }) => {
+  return get(url) as Promise<CommonResponse>
+}
+
+export const updateDataSourceNotionAction: Fetcher<CommonResponse, { url: string }> = ({ url }) => {
+  return patch(url) as Promise<CommonResponse>
+}
+
+export const invitationCheck: Fetcher<CommonResponse & { is_valid: boolean; workspace_name: string }, { url: string; params: { workspace_id: string; email: string; token: string } }> = ({ url, params }) => {
+  return get(url, { params }) as Promise<CommonResponse & { is_valid: boolean; workspace_name: string }>
+}
+
+export const activateMember: Fetcher<CommonResponse, { url: string; body: any }> = ({ url, body }) => {
+  return post(url, { body }) as Promise<CommonResponse>
+}

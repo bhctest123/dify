@@ -3,19 +3,24 @@ import type { FC } from 'react'
 import React from 'react'
 import { useContext } from 'use-context-selector'
 import produce from 'immer'
-import AddFeatureBtn from './feature/add-feature-btn'
-import ChooseFeature from './feature/choose-feature'
-import useFeature from './feature/use-feature'
-import ConfigContext from '@/context/debug-configuration'
+import { useBoolean } from 'ahooks'
+import useSWR from 'swr'
 import DatasetConfig from '../dataset-config'
 import ChatGroup from '../features/chat-group'
 import ExperienceEnchanceGroup from '../features/experience-enchance-group'
 import Toolbox from '../toolbox'
+import AddFeatureBtn from './feature/add-feature-btn'
+import AutomaticBtn from './automatic/automatic-btn'
+import type { AutomaticRes } from './automatic/get-automatic-res'
+import GetAutomaticResModal from './automatic/get-automatic-res'
+import ChooseFeature from './feature/choose-feature'
+import useFeature from './feature/use-feature'
+import ConfigContext from '@/context/debug-configuration'
 import ConfigPrompt from '@/app/components/app/configuration/config-prompt'
 import ConfigVar from '@/app/components/app/configuration/config-var'
 import type { PromptVariable } from '@/models/debug'
 import { AppType } from '@/types/app'
-import { useBoolean } from 'ahooks'
+import { fetchTenantInfo } from '@/service/common'
 
 const Config: FC = () => {
   const {
@@ -26,12 +31,16 @@ const Config: FC = () => {
     setModelConfig,
     setPrevPromptConfig,
     setFormattingChanged,
-    moreLikeThisConifg,
-    setMoreLikeThisConifg,
+    moreLikeThisConfig,
+    setMoreLikeThisConfig,
     suggestedQuestionsAfterAnswerConfig,
-    setSuggestedQuestionsAfterAnswerConfig
+    setSuggestedQuestionsAfterAnswerConfig,
+    speechToTextConfig,
+    setSpeechToTextConfig,
   } = useContext(ConfigContext)
   const isChatApp = mode === AppType.chat
+  const { data: userInfo } = useSWR({ url: '/info' }, fetchTenantInfo)
+  const openaiProvider = userInfo?.providers?.find(({ token_is_set, is_valid, provider_name }) => token_is_set && is_valid && provider_name === 'openai')
 
   const promptTemplate = modelConfig.configs.prompt_template
   const promptVariables = modelConfig.configs.prompt_variables
@@ -41,9 +50,8 @@ const Config: FC = () => {
       draft.configs.prompt_variables = [...draft.configs.prompt_variables, ...newVariables]
     })
 
-    if (modelConfig.configs.prompt_template !== newTemplate) {
+    if (modelConfig.configs.prompt_template !== newTemplate)
       setFormattingChanged(true)
-    }
 
     setPrevPromptConfig(modelConfig.configs)
     setModelConfig(newModelConfig)
@@ -59,14 +67,14 @@ const Config: FC = () => {
 
   const [showChooseFeature, {
     setTrue: showChooseFeatureTrue,
-    setFalse: showChooseFeatureFalse
+    setFalse: showChooseFeatureFalse,
   }] = useBoolean(false)
   const { featureConfig, handleFeatureChange } = useFeature({
     introduction,
     setIntroduction,
-    moreLikeThis: moreLikeThisConifg.enabled,
+    moreLikeThis: moreLikeThisConfig.enabled,
     setMoreLikeThis: (value) => {
-      setMoreLikeThisConifg(produce(moreLikeThisConifg, (draft) => {
+      setMoreLikeThisConfig(produce(moreLikeThisConfig, (draft) => {
         draft.enabled = value
       }))
     },
@@ -76,19 +84,35 @@ const Config: FC = () => {
         draft.enabled = value
       }))
     },
+    speechToText: speechToTextConfig.enabled,
+    setSpeechToText: (value) => {
+      setSpeechToTextConfig(produce(speechToTextConfig, (draft) => {
+        draft.enabled = value
+      }))
+    },
   })
 
-  const hasChatConfig = isChatApp && (featureConfig.openingStatement || featureConfig.suggestedQuestionsAfterAnswer)
+  const hasChatConfig = isChatApp && (featureConfig.openingStatement || featureConfig.suggestedQuestionsAfterAnswer || (featureConfig.speechToText && openaiProvider))
   const hasToolbox = false
 
+  const [showAutomatic, { setTrue: showAutomaticTrue, setFalse: showAutomaticFalse }] = useBoolean(false)
+  const handleAutomaticRes = (res: AutomaticRes) => {
+    const newModelConfig = produce(modelConfig, (draft) => {
+      draft.configs.prompt_template = res.prompt
+      draft.configs.prompt_variables = res.variables.map(key => ({ key, name: key, type: 'string', required: true }))
+    })
+    setModelConfig(newModelConfig)
+    setPrevPromptConfig(modelConfig.configs)
+    if (mode === AppType.chat)
+      setIntroduction(res.opening_statement)
+    showAutomaticFalse()
+  }
   return (
     <>
       <div className="pb-[20px]">
         <div className='flex justify-between items-center mb-4'>
           <AddFeatureBtn onClick={showChooseFeatureTrue} />
-          <div>
-            {/* AutoMatic */}
-          </div>
+          <AutomaticBtn onClick={showAutomaticTrue}/>
         </div>
 
         {showChooseFeature && (
@@ -98,6 +122,15 @@ const Config: FC = () => {
             isChatApp={isChatApp}
             config={featureConfig}
             onChange={handleFeatureChange}
+            showSpeechToTextItem={!!openaiProvider}
+          />
+        )}
+        {showAutomatic && (
+          <GetAutomaticResModal
+            mode={mode as AppType}
+            isShow={showAutomatic}
+            onClose={showAutomaticFalse}
+            onFinished={handleAutomaticRes}
           />
         )}
         {/* Template */}
@@ -124,21 +157,20 @@ const Config: FC = () => {
               isShowOpeningStatement={featureConfig.openingStatement}
               openingStatementConfig={
                 {
-                  promptTemplate,
                   value: introduction,
-                  onChange: setIntroduction
+                  onChange: setIntroduction,
                 }
               }
               isShowSuggestedQuestionsAfterAnswer={featureConfig.suggestedQuestionsAfterAnswer}
+              isShowSpeechText={featureConfig.speechToText}
             />
           )
         }
 
         {/* TextnGeneration config */}
-        {moreLikeThisConifg.enabled && (
+        {moreLikeThisConfig.enabled && (
           <ExperienceEnchanceGroup />
         )}
-
 
         {/* Toolbox */}
         {
