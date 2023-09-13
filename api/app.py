@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from werkzeug.exceptions import Forbidden
 
@@ -16,8 +16,9 @@ from flask import Flask, request, Response, session
 import flask_login
 from flask_cors import CORS
 
+from core.model_providers.providers import hosted
 from extensions import ext_session, ext_celery, ext_sentry, ext_redis, ext_login, ext_migrate, \
-    ext_database, ext_storage, ext_mail
+    ext_database, ext_storage, ext_mail, ext_stripe
 from extensions.ext_database import db
 from extensions.ext_login import login_manager
 
@@ -31,6 +32,7 @@ from config import Config, CloudEditionConfig
 from commands import register_commands
 from models.account import TenantAccountJoin, AccountStatus
 from models.model import Account, EndUser, App
+from services.account_service import TenantService
 
 import warnings
 warnings.simplefilter("ignore", ResourceWarning)
@@ -70,7 +72,7 @@ def create_app(test_config=None) -> Flask:
     register_blueprints(app)
     register_commands(app)
 
-    core.init_app(app)
+    hosted.init_app(app)
 
     return app
 
@@ -87,6 +89,16 @@ def initialize_extensions(app):
     ext_login.init_app(app)
     ext_mail.init_app(app)
     ext_sentry.init_app(app)
+    ext_stripe.init_app(app)
+
+
+def _create_tenant_for_account(account):
+    tenant = TenantService.create_tenant(f"{account.name}'s Workspace")
+
+    TenantService.create_tenant_member(tenant, account, role='owner')
+    account.current_tenant = tenant
+
+    return tenant
 
 
 # Flask-Login configuration
@@ -119,7 +131,9 @@ def load_user(user_id):
 
                     if tenant_account_join:
                         account.current_tenant_id = tenant_account_join.tenant_id
-                        session['workspace_id'] = account.current_tenant_id
+                    else:
+                        _create_tenant_for_account(account)
+                    session['workspace_id'] = account.current_tenant_id
                 else:
                     account.current_tenant_id = workspace_id
             else:
@@ -127,10 +141,16 @@ def load_user(user_id):
                     TenantAccountJoin.account_id == account.id).first()
                 if tenant_account_join:
                     account.current_tenant_id = tenant_account_join.tenant_id
-                    session['workspace_id'] = account.current_tenant_id
+                else:
+                    _create_tenant_for_account(account)
+                session['workspace_id'] = account.current_tenant_id
 
-            account.last_active_at = datetime.utcnow()
-            db.session.commit()
+            current_time = datetime.utcnow()
+
+            # update last_active_at when last_active_at is more than 10 minutes ago
+            if current_time - account.last_active_at > timedelta(minutes=10):
+                account.last_active_at = current_time
+                db.session.commit()
 
             # Log in the user with the updated user_id
             flask_login.login_user(account, remember=True)
@@ -229,6 +249,19 @@ def threads():
     return {
         'thread_num': num_threads,
         'threads': thread_list
+    }
+
+
+@app.route('/db-pool-stat')
+def pool_stat():
+    engine = db.engine
+    return {
+        'pool_size': engine.pool.size(),
+        'checked_in_connections': engine.pool.checkedin(),
+        'checked_out_connections': engine.pool.checkedout(),
+        'overflow_connections': engine.pool.overflow(),
+        'connection_timeout': engine.pool.timeout(),
+        'recycle_time': db.engine.pool._recycle
     }
 
 

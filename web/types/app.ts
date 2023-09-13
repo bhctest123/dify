@@ -1,6 +1,12 @@
 export enum ProviderType {
   openai = 'openai',
   anthropic = 'anthropic',
+  azure_openai = 'azure_openai',
+  replicate = 'replicate',
+  huggingface_hub = 'huggingface_hub',
+  minimax = 'minimax',
+  tongyi = 'tongyi',
+  spark = 'spark',
 }
 
 export enum AppType {
@@ -91,6 +97,9 @@ export type ModelConfig = {
     enabled: boolean
   }
   speech_to_text: {
+    enabled: boolean
+  }
+  retriever_resource: {
     enabled: boolean
   }
   agent_mode: {

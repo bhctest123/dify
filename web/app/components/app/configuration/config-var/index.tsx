@@ -4,11 +4,13 @@ import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Cog8ToothIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { useBoolean } from 'ahooks'
+import type { Timeout } from 'ahooks/lib/useRequest/src/types'
 import Panel from '../base/feature-panel'
 import OperationBtn from '../base/operation-btn'
 import VarIcon from '../base/icons/var-icon'
-import EditModel from './config-model'
+import EditModal from './config-modal'
 import IconTypeIcon from './input-type-icon'
+import type { IInputTypeIconProps } from './input-type-icon'
 import s from './style.module.css'
 import Tooltip from '@/app/components/base/tooltip'
 import type { PromptVariable } from '@/models/debug'
@@ -23,6 +25,8 @@ export type IConfigVarProps = {
   onPromptVariablesChange?: (promptVariables: PromptVariable[]) => void
 }
 
+let conflictTimer: Timeout
+
 const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVariablesChange }) => {
   const { t } = useTranslation()
   const hasVar = promptVariables.length > 0
@@ -34,9 +38,7 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
     return obj
   })()
 
-  const updatePromptVariable = (key: string, updateKey: string, newValue: any) => {
-    if (!(key in promptVariableObj))
-      return
+  const updatePromptVariable = (key: string, updateKey: string, newValue: string | boolean) => {
     const newPromptVariables = promptVariables.map((item) => {
       if (item.key === key) {
         return {
@@ -47,19 +49,21 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
 
       return item
     })
-
     onPromptVariablesChange?.(newPromptVariables)
   }
 
-  const batchUpdatePromptVariable = (key: string, updateKeys: string[], newValues: any[]) => {
-    if (!(key in promptVariableObj))
-      return
+  const batchUpdatePromptVariable = (key: string, updateKeys: string[], newValues: any[], isParagraph?: boolean) => {
     const newPromptVariables = promptVariables.map((item) => {
       if (item.key === key) {
         const newItem: any = { ...item }
         updateKeys.forEach((updateKey, i) => {
           newItem[updateKey] = newValues[i]
         })
+        if (isParagraph) {
+          delete newItem.max_length
+          delete newItem.options
+        }
+        console.log(newItem)
         return newItem
       }
 
@@ -68,8 +72,8 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
 
     onPromptVariablesChange?.(newPromptVariables)
   }
-
   const updatePromptKey = (index: number, newKey: string) => {
+    clearTimeout(conflictTimer)
     const { isValid, errorKey, errorMessageKey } = checkKeys([newKey], true)
     if (!isValid) {
       Toast.notify({
@@ -78,6 +82,7 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
       })
       return
     }
+
     const newPromptVariables = promptVariables.map((item, i) => {
       if (i === index) {
         return {
@@ -85,9 +90,18 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
           key: newKey,
         }
       }
-
       return item
     })
+
+    conflictTimer = setTimeout(() => {
+      const isKeyExists = promptVariables.some(item => item.key.trim() === newKey.trim())
+      if (isKeyExists) {
+        Toast.notify({
+          type: 'error',
+          message: t('appDebug.varKeyError.keyAlreadyExists', { key: newKey }),
+        })
+      }
+    }, 1000)
 
     onPromptVariablesChange?.(newPromptVariables)
   }
@@ -171,7 +185,7 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
                 <tr key={index} className="h-9 leading-9">
                   <td className="w-[160px] border-b border-gray-100 pl-3">
                     <div className='flex items-center space-x-1'>
-                      <IconTypeIcon type={type} />
+                      <IconTypeIcon type={type as IInputTypeIconProps['type']} />
                       {!readonly
                         ? (
                           <input
@@ -231,16 +245,15 @@ const ConfigVar: FC<IConfigVarProps> = ({ promptVariables, readonly, onPromptVar
       )}
 
       {isShowEditModal && (
-        <EditModel
+        <EditModal
           payload={currItem as PromptVariable}
           isShow={isShowEditModal}
           onClose={hideEditModal}
           onConfirm={({ type, value }) => {
             if (type === 'string')
               batchUpdatePromptVariable(currKey as string, ['type', 'max_length'], [type, value || DEFAULT_VALUE_MAX_LEN])
-
             else
-              batchUpdatePromptVariable(currKey as string, ['type', 'options'], [type, value || []])
+              batchUpdatePromptVariable(currKey as string, ['type', 'options'], [type, value || []], type === 'paragraph')
 
             hideEditModal()
           }}

@@ -51,6 +51,11 @@ const translation = {
       description: 'Once enabled, you can use voice input.',
       resDes: 'Voice input is enabled',
     },
+    citation: {
+      title: 'Citations and Attributions',
+      description: 'Once enabled, show source document and attributed section of the generated content.',
+      resDes: 'Citations and Attributions is enabled',
+    },
     dataSet: {
       title: 'Context',
       noData: 'You can import datasets as context',
@@ -93,6 +98,7 @@ const translation = {
       'Please wait for the response to the previous message to complete.',
     waitForBatchResponse:
       'Please wait for the response to the batch task to complete.',
+    notSelectModel: 'Please choose a model',
   },
   chatSubTitle: 'Pre Prompt',
   completionSubTitle: 'Prefix Prompt',
@@ -120,12 +126,17 @@ const translation = {
     tooLong: 'Variable key: {{key}} too length. Can not be longer then 16 characters',
     notValid: 'Variable key: {{key}} is invalid. Can only contain letters, numbers, and underscores',
     notStartWithNumber: 'Variable key: {{key}} can not start with a number',
+    keyAlreadyExists: 'Variable key: :{{key}} already exists',
+  },
+  otherError: {
+    promptNoBeEmpty: 'Prefix prompt can not be empty',
   },
   variableConig: {
     modalTitle: 'Field settings',
     description: 'Setting for variable {{varName}}',
     fieldType: 'Field type',
-    string: 'Text',
+    string: 'Short Text',
+    paragraph: 'Paragraph',
     select: 'Select',
     notSet: 'Not set, try typing {{input}} in the prefix prompt',
     stringTitle: 'Form text box options',

@@ -51,6 +51,11 @@ const translation = {
       description: '启用后，您可以使用语音输入。',
       resDes: '语音输入已启用',
     },
+    citation: {
+      title: '引用和归属',
+      description: '启用后，显示源文档和生成内容的归属部分。',
+      resDes: '引用和归属已启用',
+    },
     dataSet: {
       title: '上下文',
       noData: '您可以导入数据集作为上下文',
@@ -90,6 +95,7 @@ const translation = {
     queryRequired: '主要文本必填',
     waitForResponse: '请等待上条信息响应完成',
     waitForBatchResponse: '请等待批量任务完成',
+    notSelectModel: '请选择模型',
   },
   chatSubTitle: '对话前提示词',
   completionSubTitle: '前缀提示词',
@@ -116,12 +122,17 @@ const translation = {
     tooLong: '变量: {{key}} 长度太长。不能超过 16 个字符',
     notValid: '变量: {{key}} 非法。只能包含英文字符，数字和下划线',
     notStartWithNumber: '变量: {{key}} 不能以数字开头',
+    keyAlreadyExists: '变量:{{key}} 已存在',
+  },
+  otherError: {
+    promptNoBeEmpty: '前缀提示词不能为空',
   },
   variableConig: {
     modalTitle: '变量设置',
     description: '设置变量 {{varName}}',
     fieldType: '字段类型',
     string: '文本',
+    paragraph: '段落',
     select: '下拉选项',
     notSet: '未设置，在 Prompt 中输入 {{input}} 试试',
     stringTitle: '文本框设置',
