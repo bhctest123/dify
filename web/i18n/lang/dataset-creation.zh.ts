@@ -69,7 +69,7 @@ const translation = {
     indexMode: '索引方式',
     qualified: '高质量',
     recommend: '推荐',
-    qualifiedTip: '调用 OpenAI 的嵌入接口进行处理，以在用户查询时提供更高的准确度',
+    qualifiedTip: '调用系统默认的嵌入接口进行处理，以在用户查询时提供更高的准确度',
     warning: '请先完成模型供应商的 API KEY 设置。.',
     click: '前往设置',
     economical: '经济',
@@ -101,6 +101,7 @@ const translation = {
     previewSwitchTipEnd: '消耗额外的 token',
     characters: '字符',
     indexSettedTip: '要更改索引方法，请转到',
+    retrivalSettedTip: '要更改检索方法，请转到',
     datasetSettingLink: '数据集设置。',
   },
   stepThree: {
