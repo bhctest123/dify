@@ -1,24 +1,31 @@
-import type { BackendModel } from '../../header/account-setting/model-page/declarations'
 import { RETRIEVE_METHOD, type RetrievalConfig } from '@/types/app'
+import type {
+  DefaultModelResponse,
+  Model,
+} from '@/app/components/header/account-setting/model-provider-page/declarations'
+import { RerankingModeEnum } from '@/models/datasets'
 
 export const isReRankModelSelected = ({
   rerankDefaultModel,
-  isRerankDefaultModelVaild,
+  isRerankDefaultModelValid,
   retrievalConfig,
   rerankModelList,
   indexMethod,
 }: {
-  rerankDefaultModel?: BackendModel
-  isRerankDefaultModelVaild: boolean
+  rerankDefaultModel?: DefaultModelResponse
+  isRerankDefaultModelValid: boolean
   retrievalConfig: RetrievalConfig
-  rerankModelList: BackendModel[]
+  rerankModelList: Model[]
   indexMethod?: string
 }) => {
   const rerankModelSelected = (() => {
-    if (retrievalConfig.reranking_model?.reranking_model_name)
-      return !!rerankModelList.find(({ model_name }) => model_name === retrievalConfig.reranking_model?.reranking_model_name)
+    if (retrievalConfig.reranking_model?.reranking_model_name) {
+      const provider = rerankModelList.find(({ provider }) => provider === retrievalConfig.reranking_model?.reranking_provider_name)
 
-    if (isRerankDefaultModelVaild)
+      return provider?.models.find(({ model }) => model === retrievalConfig.reranking_model?.reranking_model_name)
+    }
+
+    if (isRerankDefaultModelValid)
       return !!rerankDefaultModel
 
     return false
@@ -26,7 +33,7 @@ export const isReRankModelSelected = ({
 
   if (
     indexMethod === 'high_quality'
-    && (retrievalConfig.reranking_enable || retrievalConfig.search_method === RETRIEVE_METHOD.hybrid)
+    && (retrievalConfig.search_method === RETRIEVE_METHOD.hybrid && retrievalConfig.reranking_mode !== RerankingModeEnum.WeightedScore)
     && !rerankModelSelected
   )
     return false
@@ -39,7 +46,7 @@ export const ensureRerankModelSelected = ({
   indexMethod,
   retrievalConfig,
 }: {
-  rerankDefaultModel: BackendModel
+  rerankDefaultModel: DefaultModelResponse
   retrievalConfig: RetrievalConfig
   indexMethod?: string
 }) => {
@@ -48,12 +55,13 @@ export const ensureRerankModelSelected = ({
     indexMethod === 'high_quality'
     && (retrievalConfig.reranking_enable || retrievalConfig.search_method === RETRIEVE_METHOD.hybrid)
     && !rerankModel
+    && rerankDefaultModel
   ) {
     return {
       ...retrievalConfig,
       reranking_model: {
-        reranking_provider_name: rerankDefaultModel.model_provider.provider_name,
-        reranking_model_name: rerankDefaultModel.model_name,
+        reranking_provider_name: rerankDefaultModel.provider.provider,
+        reranking_model_name: rerankDefaultModel.model,
       },
     }
   }

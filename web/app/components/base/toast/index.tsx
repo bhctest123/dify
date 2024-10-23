@@ -1,5 +1,4 @@
 'use client'
-import classNames from 'classnames'
 import type { ReactNode } from 'react'
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -10,6 +9,7 @@ import {
   XCircleIcon,
 } from '@heroicons/react/20/solid'
 import { createContext, useContext } from 'use-context-selector'
+import classNames from '@/utils/classnames'
 
 export type IToastProps = {
   type?: 'success' | 'error' | 'warning' | 'info'
@@ -22,13 +22,11 @@ export type IToastProps = {
 type IToastContext = {
   notify: (props: IToastProps) => void
 }
-const defaultDuring = 3000
 
 export const ToastContext = createContext<IToastContext>({} as IToastContext)
 export const useToastContext = () => useContext(ToastContext)
 const Toast = ({
   type = 'info',
-  duration,
   message,
   children,
   className,
@@ -39,7 +37,7 @@ const Toast = ({
 
   return <div className={classNames(
     className,
-    'fixed rounded-md p-4 my-4 mx-8 z-50',
+    'fixed rounded-md p-4 my-4 mx-8 z-[9999]',
     'top-0',
     'right-0',
     type === 'success' ? 'bg-green-50' : '',
@@ -89,10 +87,10 @@ export const ToastProvider = ({
   const placeholder: IToastProps = {
     type: 'info',
     message: 'Toast message',
-    duration: 3000,
+    duration: 6000,
   }
   const [params, setParams] = React.useState<IToastProps>(placeholder)
-
+  const defaultDuring = (params.type === 'success' || params.type === 'info') ? 3000 : 6000
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -101,7 +99,7 @@ export const ToastProvider = ({
         setMounted(false)
       }, params.duration || defaultDuring)
     }
-  }, [mounted])
+  }, [defaultDuring, mounted, params.duration])
 
   return <ToastContext.Provider value={{
     notify: (props) => {
@@ -120,6 +118,7 @@ Toast.notify = ({
   duration,
   className,
 }: Pick<IToastProps, 'type' | 'message' | 'duration' | 'className'>) => {
+  const defaultDuring = (type === 'success' || type === 'info') ? 3000 : 6000
   if (typeof window === 'object') {
     const holder = document.createElement('div')
     const root = createRoot(holder)
